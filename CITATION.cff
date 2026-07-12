@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use pymutscan in a publication, please cite this software repository."
+title: "pymutscan: fast, information-preserving MAPseq preprocessing"
+type: software
+authors:
+  - family-names: "de Vicente"
+    given-names: "Andres"
+repository-code: "https://github.com/andrestrocyte/pymutscan"
+url: "https://github.com/andrestrocyte/pymutscan"
+version: 0.2.0
+date-released: 2026-07-12
+license: MIT

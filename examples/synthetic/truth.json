@@ -1,0 +1,38 @@
+{
+  "description": "Synthetic MAPseq-like paired reads; no biological data.",
+  "seed": 20260712,
+  "total_read_pairs": 131,
+  "layout": {
+    "R1": "barcode[30] + constant[7] + skipped_tail[1]",
+    "R2": "UMI[16] + sample_index[6] + skipped_tail[1]"
+  },
+  "expected_filters": {
+    "constant_mismatch": 3,
+    "low_variable_quality": 2,
+    "ambiguous_barcode": 2,
+    "ambiguous_umi": 2,
+    "retained_reads": 122
+  },
+  "canonical_barcodes": [
+    "ACGTACGTACGTACGTACGTACGTACGTAC",
+    "TGCATGCATGCATGCATGCATGCATGCATG",
+    "GATTACAGATTACAGATTACAGATTACAGA"
+  ],
+  "barcode_error": {
+    "TCGTACGTACGTACGTACGTACGTACGTAC": "ACGTACGTACGTACGTACGTACGTACGTAC"
+  },
+  "sample_index_error": {
+    "CGTGAC": "CGTGAT"
+  },
+  "umi_error": {
+    "CAAACCCCGGGGTTTT": "AAAACCCCGGGGTTTT"
+  },
+  "template_switch_candidate": {
+    "umi": "ACACACACGTGTGTGT",
+    "barcodes": [
+      "ACGTACGTACGTACGTACGTACGTACGTAC",
+      "TGCATGCATGCATGCATGCATGCATGCATG"
+    ],
+    "sample_index": "CGTGAT"
+  }
+}

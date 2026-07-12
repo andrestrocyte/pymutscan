@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors and macOS
+.DS_Store
+.idea/
+.vscode/
+
+# Generated example outputs
+examples/output/
+notebooks/output/
+
+# Local research data and legacy/private workspaces
+data_raw/
+data_rds/
+outputs/
+R_notebooks/
+experiment_info/
+mutscan-devel/
+benchmarks/
+docs/repository_study.md
+docs/benchmark_report.md
+
+# Local-only scientific presentations (never published)
+local_presentations/
