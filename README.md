@@ -200,24 +200,24 @@ detail.
 
 Let:
 
-- \(B\) be the number of unique observed barcodes;
-- \(L\) be barcode length;
-- \(\Sigma = \{A,C,G,T\}\);
-- \(d_H(x,y)\) be Hamming distance;
-- \(r=1\) be the common correction radius.
+- $B$ be the number of unique observed barcodes;
+- $L$ be barcode length;
+- $\Sigma = \{A,C,G,T\}$;
+- $d_H(x,y)$ be Hamming distance;
+- $r=1$ be the common correction radius.
 
-For a fixed-length DNA string \(x\), the complete radius-one neighborhood is:
+For a fixed-length DNA string $x$, the complete radius-one neighborhood is:
 
-\[
+$$
 N_1(x) = \{x\}\;\cup\;
 \{x^{(i \leftarrow b)} : 1\le i\le L,\ b\in\Sigma,\ b\ne x_i\}.
-\]
+$$
 
 Its maximum size is:
 
-\[
+$$
 |N_1(x)| = 1 + L(|\Sigma|-1) = 1 + 3L.
-\]
+$$
 
 For a 30-base barcode, this is exactly **91 possible hash probes** per
 representative—one original string and 90 single substitutions.
@@ -226,15 +226,15 @@ representative—one original string and 90 single substitutions.
 
 With an observed-sequence hash table:
 
-\[
+$$
 T(B,L,r=1)=O(BL|\Sigma|),\qquad S(B)=O(B).
-\]
+$$
 
-For DNA, \(|\Sigma|=4\) is constant, so the practical radius-one path is
-\(O(BL)\).
+For DNA, $|\Sigma|=4$ is constant, so the practical radius-one path is
+$O(BL)$.
 
-The previous workflow searched a BK-tree over \(M\) composite keys, where
-typically \(M \gg B\). BK-trees are useful general metric indexes, but query
+The previous workflow searched a BK-tree over $M$ composite keys, where
+typically $M \gg B$. BK-trees are useful general metric indexes, but query
 performance depends on the metric-space distribution and does not eliminate
 the cardinality created by UMI/index combinations.
 
