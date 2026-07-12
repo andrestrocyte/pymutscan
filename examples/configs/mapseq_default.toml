@@ -1,0 +1,9 @@
+[config]
+barcode_length = 30
+umi_length = 16
+sample_index_length = 6
+constant_forward = ["CCGTACT", "CTGTACT", "TCGTACT", "TTGTACT"]
+min_average_phred = 20.0
+max_ambiguous_barcode = 0
+max_ambiguous_umi = 0
+max_ambiguous_sample_index = 0

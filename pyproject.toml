@@ -4,14 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymutscan"
-version = "0.2.0"
+version = "0.3.0"
 description = "Fast, information-preserving MAPseq FASTQ digestion and barcode collapsing"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "pymutscan contributors"}]
-dependencies = []
+dependencies = [
+  "tomli>=2.0; python_version < '3.11'",
+]
 keywords = ["MAPseq", "sequencing", "barcode", "UMI", "bioinformatics"]
 classifiers = [
   "Development Status :: 3 - Alpha",

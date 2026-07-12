@@ -1,0 +1,19 @@
+[[libraries]]
+library_id = "synthetic-L001"
+lane = "L001"
+r1 = "../synthetic/example_R1.fastq.gz"
+r2 = "../synthetic/example_R2.fastq.gz"
+
+[libraries.metadata]
+flowcell = "synthetic"
+condition = "control"
+
+[[libraries]]
+library_id = "synthetic-L002"
+lane = "L002"
+r1 = "../synthetic/example_R1.fastq.gz"
+r2 = "../synthetic/example_R2.fastq.gz"
+
+[libraries.metadata]
+flowcell = "synthetic"
+condition = "control"

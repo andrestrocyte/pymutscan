@@ -1,0 +1,7 @@
+[config]
+constant_forward = ["CCGTACT", "CTGTACT", "TCGTACT", "TTGTACT"]
+elements_forward = "VCS"
+element_lengths_forward = [30, 7, -1]
+elements_reverse = "UIS"
+element_lengths_reverse = [18, 14, -1]
+min_average_phred = 20.0

@@ -29,7 +29,7 @@ This representation also changes the correction rule: two one-error barcodes
 cannot merge unless their UMI and index strings are identical or sufficiently
 close at the same time. That is not barcode-only error correction.
 
-## Exact radius-one algorithm
+## Exact radius-one and radius-two algorithms
 
 For fixed length `L` over DNA, every string at Hamming distance at most one is
 the sequence itself or one of `3L` single-base substitutions. Store all observed
@@ -43,9 +43,26 @@ exactly implements mutscan's greedy representative semantics, including
 `collapseMinScore` and `collapseMinRatio`. The Python and R maps were identical
 for every one of 43,915 barcodes in the real-data validation slice.
 
+At radius two, the complete Hamming ball has size:
+
+$$
+1 + 3L + 9\binom{L}{2}.
+$$
+
+For $L=30$, exactly 4,006 keys are possible. pymutscan encodes DNA with two
+bits per base and caches the corresponding XOR masks once per sequence length
+and radius. Candidate lookup therefore allocates no neighbor strings and has
+expected $O(nL^2)$ time with $O(n+L^2)$ storage. Exhaustive-reference equality
+is asserted in the public benchmark before performance is reported.
+
+For fewer than 384 unique sequences, an adaptive exact exhaustive loop avoids
+the fixed 4,006-probe cost. The threshold changes only the search strategy, not
+ordering, score rules, or representative assignments.
+
 ## Information-preserving workflow
 
-1. Stream reads to `raw_counts(barcode, sample_index, umi, read_count)`.
+1. Stream reads to `raw_counts(barcode, sample_index, umi, read_count)` and,
+   when a library identity is supplied, `library_counts`.
 2. Optionally remove low-support combinations before clustering.
 3. Compute `barcode_scores` by summing across sample index and UMI.
 4. Derive `barcode_mapping(barcode, representative)` from barcode strings only.
@@ -57,9 +74,19 @@ explicit, reversible parameter rather than an irreversible loss of provenance.
 
 ## UMI treatment
 
-UMIs are retained verbatim in the initial optimized workflow. Barcode collapse
-and UMI deduplication answer different questions and should not share a distance
-calculation. If UMI error correction is enabled later, it should run within each
-`(representative barcode, sample index)` stratum and preserve both raw UMI and
-UMI representative columns.
+Barcode collapse and UMI deduplication answer different questions and never
+share a distance calculation. UMI correction runs within each `(representative
+barcode, sample index)` stratum and preserves both raw UMI and representative.
+The compatibility method gives every UMI equal score. The optional directional
+method uses the edge rule $n_p \ge 2n_c-1$ and traverses directed paths, so a
+high-support root can absorb a low-support descendant through an intermediate
+UMI only when every edge is abundance-consistent.
 
+## Composition and distance boundaries
+
+Read elements `S/U/C/V/P` follow mutscan terminology; `I` denotes the embedded
+MAPseq sample index. Elements can occur on either read and a final `-1` consumes
+the remainder. Hamming radii one and two are the high-throughput substitution
+model. Levenshtein distance is available for indels, but uses an exhaustive
+fallback because an indel-aware candidate index would change the performance
+and memory guarantees.

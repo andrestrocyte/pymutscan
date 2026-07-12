@@ -31,6 +31,13 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Byte-compile package
         run: python -m compileall -q src tests scripts
+      - name: Radius-two correctness and memory smoke benchmark
+        if: matrix.python-version == '3.12'
+        run: |
+          python scripts/benchmark_algorithms.py \
+            --sizes 100 300 --repeats 1 --profile-size 500 \
+            --output /tmp/search-benchmark.json \
+            --dataset-output /tmp/radius2-validation.tsv.gz
 
   notebooks:
     name: Execute example notebooks
@@ -66,4 +73,3 @@ jobs:
           python -m pip install build twine
           python -m build
           python -m twine check dist/*
-

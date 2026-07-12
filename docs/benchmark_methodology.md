@@ -47,3 +47,24 @@ not a hardware-pure language microbenchmark. The cardinality reduction,
 uncontended barcode-only timings, and exact map equality independently support
 the conclusion that the improvement safely exceeds 10×.
 
+## Public radius-two benchmark
+
+`scripts/benchmark_algorithms.py` generates deterministic 30-base DNA datasets
+with known distance-two pairs. It runs the optimized packed-key implementation
+and an abundance-ordered exhaustive reference on identical scores. A scale is
+reported only after the complete mapping dictionaries compare equal.
+
+Timing uses the median of three runs. Peak incremental Python memory is measured
+with `tracemalloc` after the input arrays and immutable mask cache are built.
+Validation scales compare both algorithms; the larger-scale
+profile runs the optimized algorithm only because executing the quadratic
+reference no longer adds useful evidence after equality is established at
+multiple scales.
+
+```bash
+python scripts/benchmark_algorithms.py
+```
+
+Machine-readable results are committed at
+`benchmarks_public/search_benchmark.json`. Timings are hardware-specific;
+mapping equality and asymptotic behavior are the portable claims.

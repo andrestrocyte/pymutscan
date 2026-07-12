@@ -14,8 +14,8 @@ The project started from a practical scaling problem in the FMI
 samples were represented by a long composite sequence containing the viral
 barcode, UMI, and RT sample index. As datasets grew, the number of unique
 composite keys made similarity collapse take hours. `pymutscan` changes the
-data model first, then specializes the common fixed-length, Hamming-radius-one
-search mathematically.
+data model first, then specializes the common fixed-length Hamming-radius-one
+and radius-two searches mathematically.
 
 > **Scope:** `pymutscan` reimplements and optimizes the MAPseq-relevant FASTQ
 > digestion, sequence grouping, index correction, UMI correction, persistence,
@@ -47,7 +47,7 @@ search mathematically.
 - [Repository layout](#repository-layout)
 - [Limitations and scientific decisions](#limitations-and-scientific-decisions)
 - [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
+- [Implemented roadmap](#implemented-roadmap)
 - [License](#license)
 
 ---
@@ -222,6 +222,23 @@ $$
 For a 30-base barcode, this is exactly **91 possible hash probes** per
 representative—one original string and 90 single substitutions.
 
+For radius two, pymutscan enumerates the disjoint distance-zero, distance-one,
+and distance-two shells. The exact neighborhood size is:
+
+$$
+|N_2(x)| = 1 + 3L + 3^2\binom{L}{2}.
+$$
+
+At $L=30$, this is **4,006 packed-integer probes**, rather than a scan over all
+other observed barcodes. DNA bases are encoded with two bits and every
+substitution is an XOR mask. The masks depend only on $L$ and $r$, so they are
+cached once and reused without allocating neighbor strings. Below 384 unique
+sequences, pymutscan adaptively uses the exact exhaustive loop because its
+smaller constant factor beats paying the fixed 4,006-probe cost; this threshold
+was chosen at the measured crossover and does not alter
+mapping semantics. A dedicated 128/256/384-sequence crossover check found the
+packed path slower at 256 but 1.40× faster at 384 on the benchmark host.
+
 ### Expected complexity
 
 With an observed-sequence hash table:
@@ -232,6 +249,15 @@ $$
 
 For DNA, $|\Sigma|=4$ is constant, so the practical radius-one path is
 $O(BL)$.
+
+For fixed radius two:
+
+$$
+T(B,L,r=2)=O(BL^2),\qquad S(B,L)=O(B+L^2).
+$$
+
+The $O(L^2)$ mask cache contains no dataset-dependent entries; the observed
+sequence hash table remains $O(B)$.
 
 The previous workflow searched a BK-tree over $M$ composite keys, where
 typically $M \gg B$. BK-trees are useful general metric indexes, but query
@@ -250,19 +276,18 @@ for candidate in sorted barcodes:
     if candidate score is below collapseMinScore:
         map every remaining barcode to itself
         stop
-    for neighbor in all 1 + 3L radius-one strings:
+    for neighbor key in the complete cached radius-one/radius-two mask set:
         if neighbor is active and score ratio is allowed:
             map neighbor to candidate
             remove neighbor from active
 ```
 
-Because candidate enumeration covers the full Hamming-radius-one set, this is
-an exact search—not locality-sensitive hashing or an approximate neighbor
-method.
-
-For radii greater than one, version 0.2 uses a correctness-first exhaustive
-fallback. The performance specialization and benchmark claims apply to radius
-one.
+Because candidate enumeration covers the complete Hamming ball for radii one
+and two, both paths are exact—not locality-sensitive hashing or approximate
+neighbor methods. Radius three and above use a correctness-first exhaustive
+fallback. Opt-in Levenshtein distance supports substitutions and indels through
+the same fallback and is deliberately not presented as a large-scale optimized
+path.
 
 ---
 
@@ -295,6 +320,32 @@ uncontended barcode-only comparison plus exact map equality provide independent
 validation. Full methodology is in
 [`docs/benchmark_methodology.md`](docs/benchmark_methodology.md).
 
+### Radius-two search benchmark
+
+The public deterministic benchmark compares the packed exact search to an
+exhaustive greedy reference on 30-base synthetic DNA. Each optimized mapping is
+asserted equal to the reference before timing is recorded.
+
+| Unique sequences | Exhaustive radius 2 | pymutscan exact radius 2 | Speedup | Peak optimized memory |
+|---:|---:|---:|---:|---:|
+| 128 | 0.0088 s | 0.0091 s, adaptive exhaustive | 0.96× | 0.04 MiB |
+| 256 | 0.0360 s | 0.0411 s, adaptive exhaustive | 0.88× | 0.09 MiB |
+| 384 | 0.0843 s | 0.0600 s, packed XOR | 1.40× | 0.16 MiB |
+| 500 | 0.149 s | 0.081 s | 1.84× | 0.18 MiB |
+| 2,000 | 2.380 s | 0.327 s | 7.28× | 0.71 MiB |
+| 5,000 | 15.538 s | 0.906 s | 17.15× | 1.99 MiB |
+
+The crossover is scale-dependent: exhaustive search can be reasonable for a
+very small set, but its quadratic growth dominates as barcode diversity rises.
+An optimized-only 20,000-sequence memory profile completed in 3.691 s with
+7.78 MiB peak traced allocation; the quadratic reference was intentionally not
+run at that scale after exact equality had been established at three validation
+scales. Memory values are incremental grouping allocations measured after the
+input arrays and immutable mask cache are constructed.
+Raw machine-readable results and the reproducible generator are in
+[`benchmarks_public/search_benchmark.json`](benchmarks_public/search_benchmark.json)
+and [`scripts/benchmark_algorithms.py`](scripts/benchmark_algorithms.py).
+
 ---
 
 ## Data model and provenance
@@ -306,15 +357,21 @@ mapping adjacent to the data it transforms.
 | Table | Grain | Purpose |
 |---|---|---|
 | `raw_counts` | observed barcode × raw index × raw UMI | original retained observations |
+| `libraries` | library identity | FASTQ paths, lane, and JSON annotations |
+| `library_counts` | library × barcode × index × UMI | lane-resolved retained observations |
 | `qc` | metric | FASTQ filtering counts |
 | `run_metadata` | key/value | paths, layout, thresholds, format version |
 | `barcode_scores` | observed barcode | score used for barcode clustering |
 | `barcode_mapping` | observed barcode | representative assignment |
 | `sample_index_mapping` | observed index | exact/corrected/ambiguous/unassigned decision |
 | `collapsed_counts` | representative barcode × normalized index × raw UMI | barcode/index-corrected reads |
+| `library_collapsed_counts` | library × representative barcode × normalized index × raw UMI | library-resolved corrected reads |
 | `umi_mapping` | barcode × index × raw UMI | UMI representative assignment |
 | `umi_collapsed_counts` | barcode × index × UMI representative | reads after UMI correction |
 | `molecule_counts` | barcode × index | molecule representatives and read support |
+| `library_umi_collapsed_counts` / `library_molecule_counts` | library-resolved corrected molecules | preserve lane/library identity through final summaries |
+| `sample_metadata` | corrected sample index | arbitrary source metadata retained as JSON |
+| `template_switch_evidence` | sample × shared UMI | non-causal multi-barcode support evidence |
 
 No correction overwrites `raw_counts`. Filtering and collapsing parameters are
 recorded in `run_metadata`.
@@ -433,6 +490,56 @@ pymutscan digest --r1 R1.fastq.gz --r2 R2.fastq.gz \
 
 Multiple accepted constants may be passed by repeating `--constant-forward`.
 
+### Native configuration and named presets
+
+JSON and TOML configurations are validated by `MapSeqConfig`. The repository
+ships editable examples in [`examples/configs/`](examples/configs/) and three
+built-in presets:
+
+```bash
+pymutscan presets
+pymutscan digest --preset mapseq-default --r1 R1.fastq.gz --r2 R2.fastq.gz \
+  --database results.sqlite
+pymutscan digest --config experiment.toml --r1 R1.fastq.gz --r2 R2.fastq.gz \
+  --database results.sqlite
+```
+
+Built-ins are `mapseq-default`, `mapseq-30-18-14`, and
+`mapseq-template-switch`. A file may also contain `[presets.name]` sections and
+select one with `--config FILE --preset name`.
+
+### General read compositions and single-end data
+
+Explicit compositions support the mutscan element alphabet plus one MAPseq
+extension:
+
+| Symbol | Meaning |
+|---|---|
+| `V` | variable sequence, concatenated into the barcode |
+| `U` | UMI |
+| `C` | constant sequence, checked against the accepted constants |
+| `P` | primer, checked against the accepted primers |
+| `S` | skipped bases |
+| `I` | pymutscan sample-index segment |
+
+Each element has a length; a final `-1` consumes the read remainder. Multiple
+elements of one type are concatenated in read order. Forward and reverse reads
+can be reverse-complemented before extraction. When all required `V`, `U`, and
+`I` elements are in R1, omit `--r2` for validated single-end ingestion. The
+legacy length-based paired layout remains the default and produces identical
+tables to version 0.2.
+
+Example TOML:
+
+```toml
+[config]
+elements_forward = "VCS"
+element_lengths_forward = [30, 7, -1]
+elements_reverse = "UIS"
+element_lengths_reverse = [18, 14, -1]
+constant_forward = ["CCGTACT", "CTGTACT", "TCGTACT", "TTGTACT"]
+```
+
 ---
 
 ## Command reference
@@ -453,6 +560,18 @@ Important options:
 | `--min-average-phred` | 20 | minimum mean quality in barcode and R2 variable fields |
 | `--max-reads` | all | bounded test/debug run |
 
+### `pymutscan ingest`
+
+Ingests every entry in a JSON/TOML manifest without concatenating FASTQs.
+Every entry requires a unique `library_id` and R1 path; R2, lane, and arbitrary
+metadata are optional. `raw_counts` remains the backward-compatible aggregate,
+while `library_counts` preserves the library dimension.
+
+```bash
+pymutscan ingest --manifest examples/configs/two_lane_manifest.toml \
+  --database multilane.sqlite --preset mapseq-default
+```
+
 ### `pymutscan map-indices`
 
 Maps every observed RT index to a known whitelist. A correction is accepted
@@ -467,16 +586,42 @@ barcode/index/UMI counts. `--min-combo-reads` implements optional pre-collapse
 filtering such as the lenient two-read sensitivity proposed for large
 qualitative datasets.
 
+Hamming radii one and two use exact optimized lookup. Use
+`--distance-metric levenshtein` only when indel correction is scientifically
+justified; it permits variable-length sequences but uses the exhaustive
+correctness path and should be benchmarked on the intended dataset.
+
 ### `pymutscan collapse-umis`
 
 Collapses UMIs separately within every representative-barcode/sample-index
-stratum. Version 0.2 uses equal UMI scores and lexicographic greedy priority to
-match the original mutscan-style UMI representative choice.
+stratum. The default `--method equal` preserves version 0.2 lexicographic
+behavior. Opt-in `--method directional` uses observed read support and accepts
+a directed parent-child edge only when $n_p \ge 2n_c - 1$. Directionally valid
+paths are traversed transitively, matching the scientific intent of abundance-
+directional UMI networks.
 
 ### `pymutscan export`
 
 Exports one allowed SQLite table as TSV or gzip-compressed TSV when the output
 name ends in `.gz`.
+
+### Merge, metadata, sparse matrix, and template-switch commands
+
+```bash
+pymutscan merge --source lane1.sqlite --source lane2.sqlite --output merged.sqlite
+pymutscan import-metadata --database merged.sqlite \
+  --input sample_metadata.tsv
+pymutscan export-sparse --database merged.sqlite \
+  --output-directory matrix --value molecule_count
+pymutscan template-switch --database merged.sqlite \
+  --min-reads-per-barcode 2 --min-barcodes 2
+```
+
+`merge` rejects duplicate library identities rather than silently combining
+them. Sparse export writes standard Matrix Market `matrix.mtx`, ordered
+`barcodes.tsv`, and `samples.tsv` with metadata. Template-switch calling writes
+an evidence table; its labels explicitly describe shared-UMI support and never
+assert causality.
 
 ---
 
@@ -492,6 +637,7 @@ uses only synthetic public data.
 | `02_quality_control.ipynb` | Which filters removed reads, and how well did index mapping work? | QC summaries and plots |
 | `03_template_switch_analysis.ipynb` | Which UMIs are associated with multiple barcode representatives? | thresholded candidate table |
 | `04_barcode_sample_matrix.ipynb` | Which corrected barcodes occur in which samples and with how many molecules? | barcode × sample matrix and heatmap |
+| `05_multilibrary_roadmap.ipynb` | How do named lanes, radius two, directional UMIs, metadata, sparse export, and switch evidence compose? | library-resolved SQLite and Matrix Market outputs |
 
 Launch locally:
 
@@ -574,6 +720,12 @@ ORDER BY reads DESC;
 
 The template-switch notebook adds per-barcode support and lenient read
 thresholds so sequencing errors are not confused with high-support shared UMIs.
+The same logic is available as `pymutscan template-switch`, which materializes
+`template_switch_evidence` with per-candidate barcode counts, minimum and
+maximum support, total reads, and the full support vector. The evidence levels
+are deliberately named `shared_umi_evidence` and
+`shared_umi_high_support`: barcode error, UMI collision, PCR chimera, and true
+template switching remain alternative explanations.
 
 ---
 
@@ -604,9 +756,12 @@ columns instead of requiring downstream code to parse one composite identifier.
 ```python
 from pymutscan import (
     MapSeqConfig,
+    call_template_switch_evidence,
     collapse_database,
     collapse_umis,
     digest_fastqs,
+    digest_libraries,
+    export_sparse_matrix,
     map_sample_indices,
 )
 
@@ -624,8 +779,15 @@ collapse_database(
     collapse_min_score=2,
     collapse_min_ratio=0,
 )
-collapse_umis("results.sqlite", collapse_max_dist=1)
+collapse_umis("results.sqlite", collapse_max_dist=1, method="equal")
+call_template_switch_evidence("results.sqlite", min_reads_per_barcode=2)
+export_sparse_matrix("results.sqlite", "matrix")
 ```
+
+For multi-lane ingestion, pass manifest-like dictionaries to
+`digest_libraries`. For indel-aware small datasets, pass
+`distance_metric="levenshtein"` to `collapse_database`; Hamming remains the
+default.
 
 For direct sequence grouping:
 
@@ -662,7 +824,11 @@ GitHub Actions runs:
 Tests cover published mutscan mapping examples, lexicographic ties, paired FASTQ
 digestion, barcode-only collapsing with retained UMIs/indices, independent
 sample-index mapping, within-stratum UMI collapse, molecule counts, and the
-bundled synthetic truth dataset.
+bundled synthetic truth dataset. Roadmap tests additionally cover exact
+radius-two equality, Levenshtein indels, directional UMI networks, JSON/TOML
+configuration, single-end compositions, multi-library ingestion, collision-
+safe database merging, sample metadata, sparse export, and template-switch
+evidence.
 
 ---
 
@@ -672,6 +838,8 @@ bundled synthetic truth dataset.
 pymutscan/
 ├── .github/workflows/ci.yml
 ├── examples/synthetic/           # deterministic public paired FASTQs + truth
+├── examples/configs/             # native configs and multi-lane manifest
+├── benchmarks_public/            # reproducible public timing/memory results
 ├── notebooks/                    # processing, QC, template-switch, matrix analyses
 ├── scripts/
 │   ├── export_summarized_experiment.R
@@ -679,7 +847,8 @@ pymutscan/
 │   └── run_example_pipeline.py
 ├── src/pymutscan/
 │   ├── cli.py
-│   ├── collapse.py               # exact greedy radius-one grouping
+│   ├── collapse.py               # exact greedy radius-one/two grouping
+│   ├── config.py                 # JSON/TOML validation and presets
 │   ├── fastq.py                  # streaming paired FASTQ reader
 │   └── pipeline.py               # SQLite workflow and exports
 ├── tests/
@@ -693,8 +862,9 @@ pymutscan/
 ## Limitations and scientific decisions
 
 - The optimized algorithm is specialized for fixed-length DNA at Hamming
-  radius one. Larger radii currently use an exhaustive fallback.
-- Hamming distance models substitutions, not insertions/deletions.
+  radius one or two. Larger radii use an exhaustive fallback.
+- Levenshtein mode supports substitutions and indels, but is exhaustive and
+  intended for bounded datasets; Hamming remains the recommended MAPseq model.
 - Greedy abundance clustering is order-dependent and is not connected-component
   clustering.
 - Barcode neighbors can represent either sequencing errors or genuinely
@@ -702,13 +872,26 @@ pymutscan/
   scientific parameters, not universal constants.
 - Sample-index rescue requires a validated whitelist. Ambiguous or distant
   observations are retained as unresolved.
-- Equal-score lexicographic UMI clustering matches the implemented mutscan-like
-  behavior but is not the only UMI error model. Directional abundance methods
-  may be preferable for some assays.
-- The current digest path targets contiguous MAPseq fields at the start of R1
-  and R2. It does not yet implement every `S/U/C/V/P`, primer, reverse-complement,
-  paired-overlap, or wild-type mutation feature of general R `mutscan`.
+- Equal-score lexicographic UMI clustering remains the compatibility default;
+  abundance-directional correction is opt-in because molecule-count priors are
+  assay- and amplification-dependent.
+- General `S/U/C/V/P` composition, an explicit `I` index element, primers,
+  constants, reverse complements, remainder segments, and single-end reads are
+  supported. Paired-overlap assembly and wild-type codon/amino-acid annotation
+  remain outside the MAPseq preprocessing scope.
 - Template-switch candidates are associations, not proof of mechanism.
+
+### Gap status after version 0.3
+
+| Former gap | Version 0.3 status |
+|---|---|
+| Single FASTQ | Supported when the configured forward composition contains every required field |
+| Multiple FASTQs/lanes | Manifest ingestion with explicit `library_id`, lane, and metadata |
+| Radius greater than one | Radius two optimized exactly; radius three and above remain exhaustive |
+| Indels | Opt-in Levenshtein correction, exhaustive and intended for bounded datasets |
+| Full mutscan DMS features | Still intentionally out of scope; no approximate fitness/statistics substitute |
+| Re-merge SQLite databases | Built-in collision-safe `pymutscan merge`, including legacy aggregate databases |
+| Template-switch calling | Built-in evidence table, explicitly non-causal |
 
 ---
 
@@ -746,8 +929,10 @@ SELECT * FROM run_metadata ORDER BY key;
 
 ### Paired FASTQ names differ
 
-`pymutscan` requires synchronized R1/R2 records. Re-pair or regenerate the
-files upstream rather than suppressing the validation.
+Paired mode requires synchronized R1/R2 records. Re-pair or regenerate the
+files upstream rather than suppressing validation. For a scientifically valid
+single-end layout, describe all required fields in `elements_forward` and omit
+R2.
 
 ### Notebook kernel cannot import pymutscan
 
@@ -759,15 +944,25 @@ python -m pip install -e ".[notebooks]"
 
 ---
 
-## Roadmap
+## Implemented roadmap
 
-- native configuration files and named experiment presets;
-- optimized exact search for radius two;
-- optional abundance-directional UMI correction;
-- multi-file/lane ingestion with explicit library identities;
-- richer sample metadata and sparse barcode-by-sample exports;
-- additional mutscan-compatible FASTQ composition elements;
-- benchmark datasets and memory profiling at larger scales.
+Version 0.3 implements the full preprocessing roadmap:
+
+- validated JSON/TOML configuration and named experiment presets;
+- exact packed-key Hamming search for radii one and two;
+- optional abundance-directional, transitive UMI correction;
+- single-end or paired-end, multi-file/lane ingestion with explicit libraries;
+- collision-safe re-merging of independently digested SQLite databases;
+- arbitrary sample metadata and sparse barcode-by-sample Matrix Market export;
+- mutscan-compatible `S/U/C/V/P` compositions plus explicit MAPseq index `I`;
+- built-in, non-causal template-switch evidence materialization;
+- opt-in Levenshtein indel support through a correctness-first fallback;
+- deterministic benchmark datasets, exact-map assertions, and peak-memory
+  profiling at validation and larger optimized-only scales.
+
+The remaining boundary is intentional: general mutscan DMS fitness statistics,
+wild-type codon/amino-acid annotation, plots, and paired-overlap assembly are a
+different scientific workflow and are not silently approximated here.
 
 ---
 
@@ -777,4 +972,3 @@ python -m pip install -e ".[notebooks]"
 
 The FMI `mutscan` project is a separate R package with its own authors,
 copyright, license, and scope. `pymutscan` does not vendor its source code.
-

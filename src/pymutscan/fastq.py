@@ -57,3 +57,14 @@ def paired_records(
             raise ValueError(f"paired read names differ: {name1} / {name2}")
         yield name1, seq1, qual1, seq2, qual2
 
+
+def read_sets(
+    r1_path: str | Path,
+    r2_path: str | Path | None = None,
+) -> Iterator[tuple[str, str, str, str | None, str | None]]:
+    """Yield single-end records or synchronized paired-end records."""
+    if r2_path is None:
+        for name, sequence, quality in records(r1_path):
+            yield name, sequence, quality, None, None
+        return
+    yield from paired_records(r1_path, r2_path)

@@ -1,0 +1,85 @@
+{
+  "large_scale_profile": {
+    "exhaustive_skipped": true,
+    "length": 30,
+    "optimized_peak_bytes": 8162376,
+    "optimized_seconds": 3.691047999993316,
+    "radius": 2,
+    "reason": "quadratic reference is retained at validation scales only",
+    "unique_sequences": 20000
+  },
+  "notes": "Synthetic fixed-length DNA; exact mapping equality is asserted for every validation scale. tracemalloc reports incremental grouping allocations after inputs and the immutable mask cache are constructed.",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "repeats": 3,
+  "results": [
+    {
+      "exhaustive_seconds_median": 0.008768375002546236,
+      "length": 30,
+      "mappings_identical": true,
+      "optimized_peak_bytes": 43104,
+      "optimized_seconds_median": 0.009120665999944322,
+      "radius": 2,
+      "search_strategy": "adaptive_exhaustive",
+      "speedup": 0.9613744218459226,
+      "unique_sequences": 128
+    },
+    {
+      "exhaustive_seconds_median": 0.036032917007105425,
+      "length": 30,
+      "mappings_identical": true,
+      "optimized_peak_bytes": 94520,
+      "optimized_seconds_median": 0.04107274999842048,
+      "radius": 2,
+      "search_strategy": "adaptive_exhaustive",
+      "speedup": 0.8772949707163784,
+      "unique_sequences": 256
+    },
+    {
+      "exhaustive_seconds_median": 0.08428087498759851,
+      "length": 30,
+      "mappings_identical": true,
+      "optimized_peak_bytes": 169328,
+      "optimized_seconds_median": 0.060046708007575944,
+      "radius": 2,
+      "search_strategy": "packed_xor",
+      "speedup": 1.4035886026751874,
+      "unique_sequences": 384
+    },
+    {
+      "exhaustive_seconds_median": 0.14948391600046307,
+      "length": 30,
+      "mappings_identical": true,
+      "optimized_peak_bytes": 185948,
+      "optimized_seconds_median": 0.08111741700849961,
+      "radius": 2,
+      "search_strategy": "packed_xor",
+      "speedup": 1.8428091218042595,
+      "unique_sequences": 500
+    },
+    {
+      "exhaustive_seconds_median": 2.3795817499922123,
+      "length": 30,
+      "mappings_identical": true,
+      "optimized_peak_bytes": 739416,
+      "optimized_seconds_median": 0.32670662499731407,
+      "radius": 2,
+      "search_strategy": "packed_xor",
+      "speedup": 7.283542995223239,
+      "unique_sequences": 2000
+    },
+    {
+      "exhaustive_seconds_median": 15.537526957996306,
+      "length": 30,
+      "mappings_identical": true,
+      "optimized_peak_bytes": 2082808,
+      "optimized_seconds_median": 0.9057500000053551,
+      "radius": 2,
+      "search_strategy": "packed_xor",
+      "speedup": 17.15432178625939,
+      "unique_sequences": 5000
+    }
+  ],
+  "schema_version": 1,
+  "seed": 20260712
+}
