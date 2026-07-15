@@ -54,6 +54,14 @@ def _parser() -> argparse.ArgumentParser:
     collapse.add_argument("--min-score", type=float, default=2)
     collapse.add_argument("--min-ratio", type=float, default=0)
     collapse.add_argument("--min-combo-reads", type=int, default=1)
+    collapse.add_argument(
+        "--drop-singleton-combinations",
+        action="store_true",
+        help=(
+            "before collapsing, exclude barcode/sample-index/UMI combinations "
+            "with an experiment-wide read count of one"
+        ),
+    )
     collapse.add_argument("--distance-metric", choices=["hamming", "levenshtein"], default="hamming")
 
     indices = commands.add_parser("map-indices", help="correct RT sample indices against a whitelist")
@@ -142,6 +150,7 @@ def main() -> None:
             collapse_min_ratio=args.min_ratio,
             min_combo_reads=args.min_combo_reads,
             distance_metric=args.distance_metric,
+            drop_singleton_combinations=args.drop_singleton_combinations,
         )
     elif args.command == "collapse-umis":
         result = collapse_umis(

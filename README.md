@@ -582,9 +582,35 @@ in downstream grouping rather than being silently forced.
 ### `pymutscan collapse`
 
 Creates barcode marginal scores, the barcode mapping, and re-aggregated
-barcode/index/UMI counts. `--min-combo-reads` implements optional pre-collapse
-filtering such as the lenient two-read sensitivity proposed for large
-qualitative datasets.
+barcode/index/UMI counts. By default, every observed combination is retained,
+which preserves the behavior of earlier releases. The optional
+`--drop-singleton-combinations` flag excludes each unique
+`(barcode, sample_index, UMI)` combination whose total read count is exactly
+one before barcode scores are computed and before barcode or UMI collapse:
+
+```bash
+pymutscan collapse --database results.sqlite --drop-singleton-combinations
+```
+
+For a combination $c=(b,s,u)$ with experiment-wide count $n_c$, the retained
+set is
+
+$$
+\mathcal{C}_{\mathrm{keep}} = \{c : n_c \ge 2\}.
+$$
+
+The raw row is not deleted from `raw_counts`; it remains available for auditing.
+The filter changes `barcode_scores`, `barcode_mapping`, `collapsed_counts`, and
+the corresponding library-resolved collapsed tables. With multiple FASTQ files,
+$n_c$ is the sum across all libraries in the merged experiment. Thus, a
+combination seen once in each of two files has $n_c=2$ and is retained, while
+the library identity remains available in the `library_*` tables.
+
+The general `--min-combo-reads N` option remains available. If both controls
+are supplied, the effective threshold is $\max(N,2)$. The JSON command result
+reports `filtered_combinations`, `filtered_reads`, and
+`effective_min_combo_reads`; the requested flag and effective threshold are
+also stored under `run_metadata.collapse_parameters`.
 
 Hamming radii one and two use exact optimized lookup. Use
 `--distance-metric levenshtein` only when indel correction is scientifically
@@ -778,6 +804,7 @@ collapse_database(
     collapse_max_dist=1,
     collapse_min_score=2,
     collapse_min_ratio=0,
+    drop_singleton_combinations=True,
 )
 collapse_umis("results.sqlite", collapse_max_dist=1, method="equal")
 call_template_switch_evidence("results.sqlite", min_reads_per_barcode=2)
@@ -921,7 +948,8 @@ LIMIT 20;
 
 ### Read totals differ after collapse
 
-Check whether `min_combo_reads` was greater than one. Inspect stored parameters:
+Check whether `--drop-singleton-combinations` was enabled or
+`--min-combo-reads` was greater than one. Inspect stored parameters:
 
 ```sql
 SELECT * FROM run_metadata ORDER BY key;

@@ -158,7 +158,10 @@ class RoadmapTests(unittest.TestCase):
             legacy_merged = tmp / "legacy-merged.sqlite"
             self.assertEqual(merge_databases([legacy], legacy_merged)["libraries"], 1)
 
-            collapse_database(combined)
+            collapse_result = collapse_database(
+                combined, drop_singleton_combinations=True
+            )
+            self.assertEqual(collapse_result["filtered_combinations"], 0)
             collapse_umis(combined, method="directional")
             con = sqlite3.connect(combined)
             self.assertEqual(

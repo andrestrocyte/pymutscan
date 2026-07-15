@@ -455,10 +455,28 @@ def collapse_database(
     collapse_min_ratio: float = 0,
     min_combo_reads: int = 1,
     distance_metric: str = "hamming",
+    drop_singleton_combinations: bool = False,
 ) -> dict[str, int | float]:
-    """Collapse barcodes only and retain sample-index/UMI stratification."""
+    """Collapse barcodes only and retain sample-index/UMI stratification.
+
+    When ``drop_singleton_combinations`` is enabled, raw combinations with an
+    experiment-wide read count of one remain auditable in ``raw_counts`` but
+    are excluded from barcode scoring and all collapsed output tables.
+    """
+    if min_combo_reads < 1:
+        raise ValueError("min_combo_reads must be at least one")
+    effective_min_combo_reads = (
+        max(min_combo_reads, 2) if drop_singleton_combinations else min_combo_reads
+    )
     con = _connect(database)
     started = perf_counter()
+    input_combinations, input_reads = con.execute(
+        "SELECT count(*), COALESCE(sum(read_count), 0) FROM raw_counts"
+    ).fetchone()
+    retained_combinations, retained_reads = con.execute(
+        "SELECT count(*), COALESCE(sum(read_count), 0) FROM raw_counts WHERE read_count >= ?",
+        (effective_min_combo_reads,),
+    ).fetchone()
     has_index_mapping = con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sample_index_mapping'"
     ).fetchone() is not None
@@ -481,7 +499,7 @@ def collapse_database(
         WHERE read_count >= ?
         GROUP BY barcode
         """,
-        (min_combo_reads,),
+        (effective_min_combo_reads,),
     )
     rows = con.execute("SELECT barcode, score FROM barcode_scores").fetchall()
     sequences = [row[0] for row in rows]
@@ -522,7 +540,7 @@ def collapse_database(
         FROM raw_counts r
         JOIN barcode_mapping m USING (barcode)
         {index_join}
-        WHERE r.read_count >= {int(min_combo_reads)}
+        WHERE r.read_count >= {int(effective_min_combo_reads)}
         GROUP BY m.representative, {index_value}, r.umi;
         """
     )
@@ -552,9 +570,13 @@ def collapse_database(
             INSERT INTO library_collapsed_counts
             SELECT r.library_id, m.representative, {library_index_value}, r.umi, sum(r.read_count)
             FROM library_counts r
-            JOIN barcode_mapping m USING (barcode)
+            JOIN raw_counts total
+              ON total.barcode = r.barcode
+             AND total.sample_index = r.sample_index
+             AND total.umi = r.umi
+            JOIN barcode_mapping m ON m.barcode = r.barcode
             {library_index_join}
-            WHERE r.read_count >= {int(min_combo_reads)}
+            WHERE total.read_count >= {int(effective_min_combo_reads)}
             GROUP BY r.library_id, m.representative, {library_index_value}, r.umi;
             """
         )
@@ -563,6 +585,8 @@ def collapse_database(
         "collapse_min_score": collapse_min_score,
         "collapse_min_ratio": collapse_min_ratio,
         "min_combo_reads": min_combo_reads,
+        "drop_singleton_combinations": drop_singleton_combinations,
+        "effective_min_combo_reads": effective_min_combo_reads,
         "distance_metric": distance_metric,
     }
     con.execute(
@@ -581,6 +605,9 @@ def collapse_database(
         "input_barcodes": len(sequences),
         "representatives": n_representatives,
         "collapsed_combinations": n_collapsed_combinations,
+        "filtered_combinations": input_combinations - retained_combinations,
+        "filtered_reads": input_reads - retained_reads,
+        "effective_min_combo_reads": effective_min_combo_reads,
         "elapsed_seconds": perf_counter() - started,
     }
 
