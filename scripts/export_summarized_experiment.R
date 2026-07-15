@@ -52,7 +52,7 @@ se <- SummarizedExperiment(
         preservedFields = c("sampleIndex", "umi"),
         sourceCollapsedCounts = counts_path,
         barcodeMapping = mapping_path,
-        processingInfo = paste("Exported by pymutscan 0.3.0 on", Sys.time())
+        processingInfo = paste("Exported by pymutscan 0.3.1 on", Sys.time())
     )
 )
 

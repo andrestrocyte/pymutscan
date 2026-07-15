@@ -7,6 +7,6 @@ authors:
     given-names: "Andres"
 repository-code: "https://github.com/andrestrocyte/pymutscan"
 url: "https://github.com/andrestrocyte/pymutscan"
-version: 0.3.0
-date-released: 2026-07-12
+version: 0.3.1
+date-released: 2026-07-15
 license: MIT
